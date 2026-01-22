@@ -3,49 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"math"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/urfave/cli/v3"
 )
 
-type BookState byte
-
-const (
-	BS_NONE BookState = iota
-	BS_READING
-	BS_FINISHED
-	BS_TBR
-	BS_DNF
-)
-
-func (s BookState) String() string {
-	return [...]string{"NONE", "READING", "FINISHED", "TBR", "DNF"}[s]
-}
-
-type Book struct {
-	Title    string
-	Author   string
-	ISBN     string
-	State    BookState
-	Started  time.Time
-	Finished time.Time
-	Took     time.Time
-	Genres   []string
-}
-
-func (b *Book) String() string {
-	return fmt.Sprintf(
-		"Title   : %s\nAuthor  : %s\nISBN    : %s\nState   : %s\nStarted : %s\nFinished: %s\nTook    : %s\nGenres  : %s",
-		b.Title, b.Author, b.ISBN, b.State,
-		b.Started, b.Finished, b.Took,
-		strings.Join(b.Genres, " "))
-}
-
 var defaultAction = func(_ context.Context, c *cli.Command) error {
+	fmt.Printf("TODO: '%s'\n", c.Name)
 	lenght := c.Args().Len()
 	padding := 1 + int(math.Log10(float64(lenght)))
 	for ix := range lenght {
@@ -66,6 +32,11 @@ var addFlags = []cli.Flag{
 		Aliases:  []string{"a"},
 		Usage:    "the name of the `author`",
 		Required: true,
+	},
+	&cli.StringFlag{
+		Name:    "series",
+		Aliases: []string{"se"},
+		Usage:   "the name of the `series` the book belongs to",
 	},
 	&cli.StringFlag{
 		Name:  "isbn",
@@ -117,31 +88,35 @@ var addFlags = []cli.Flag{
 	},
 }
 
-func main() {
-	cmd := &cli.Command{
-		Name:  "bookTracker",
-		Usage: "use to track the books you read",
-		Commands: []*cli.Command{
-			{
-				Name:  "add",
-				Usage: "add a new book",
-				Flags: addFlags,
-				Action: func(ctx context.Context, c *cli.Command) error {
-					fmt.Printf("args: %s\n", c.Args())
-					fmt.Printf("author: %s\n", c.String("author"))
-					fmt.Printf("start: %s\n", c.Timestamp("start"))
-					return nil
-				},
-			},
-			{
-				Name:   "list",
-				Usage:  "list out all of the books in the database",
-				Action: defaultAction,
+var CMD = &cli.Command{
+	Name:  "bookTracker",
+	Usage: "track your books locally",
+	Commands: []*cli.Command{
+		{
+			Name:  "add",
+			Usage: "add a new book",
+			Flags: addFlags,
+			Action: func(ctx context.Context, c *cli.Command) error {
+				fmt.Printf("args: %s\n", c.Args())
+				fmt.Printf("author: %s\n", c.String("author"))
+				fmt.Printf("start: %s\n", c.Timestamp("start"))
+				return nil
 			},
 		},
-	}
-
-	if err := cmd.Run(context.Background(), os.Args); err != nil {
-		log.Fatal(err)
-	}
+		{
+			Name:   "finish",
+			Usage:  "finish a book that you started",
+			Action: defaultAction,
+		},
+		{
+			Name:   "start",
+			Usage:  "start a book",
+			Action: defaultAction,
+		},
+		{
+			Name:   "list",
+			Usage:  "list out all of the books in the database",
+			Action: defaultAction,
+		},
+	},
 }
