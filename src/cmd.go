@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"math"
 	"strings"
@@ -22,10 +23,9 @@ var defaultAction = func(_ context.Context, c *cli.Command) error {
 
 var addFlags = []cli.Flag{
 	&cli.StringFlag{
-		Name:     "title",
-		Aliases:  []string{"t"},
-		Usage:    "the `title` of the book",
-		Required: true,
+		Name:  "isbn",
+		Usage: "the `ISBN` number of the book",
+		Value: "",
 	},
 	&cli.StringFlag{
 		Name:     "author",
@@ -34,13 +34,16 @@ var addFlags = []cli.Flag{
 		Required: true,
 	},
 	&cli.StringFlag{
+		Name:     "title",
+		Aliases:  []string{"t"},
+		Usage:    "the `title` of the book",
+		Required: true,
+	},
+	&cli.StringFlag{
 		Name:    "series",
 		Aliases: []string{"se"},
 		Usage:   "the name of the `series` the book belongs to",
-	},
-	&cli.StringFlag{
-		Name:  "isbn",
-		Usage: "the `ISBN` number of the book",
+		Value:   "",
 	},
 	&cli.StringFlag{
 		Name:        "state",
@@ -81,13 +84,71 @@ var addFlags = []cli.Flag{
 		},
 		DefaultText: "now",
 	},
-	&cli.StringFlag{
+	&cli.StringSliceFlag{
 		Name:    "genres",
 		Aliases: []string{"g"},
 		Usage:   "a list of comma separated genres `genre1,genre2`",
+		Value:   nil,
 	},
 }
 
+var startFlags = []cli.Flag{
+	&cli.StringFlag{
+		Name:  "isbn",
+		Usage: "the `ISBN` number of the book",
+		Value: "",
+	},
+	&cli.StringFlag{
+		Name:     "author",
+		Aliases:  []string{"a"},
+		Usage:    "the name of the `author`",
+		Required: true,
+		Action: func(ctx context.Context, c *cli.Command, s string) error {
+			if s == "" {
+				return fmt.Errorf("author can not be an empty string")
+			}
+			return nil
+		},
+	},
+	&cli.StringFlag{
+		Name:     "title",
+		Aliases:  []string{"t"},
+		Usage:    "the `title` of the book",
+		Required: true,
+		Action: func(ctx context.Context, c *cli.Command, s string) error {
+			if s == "" {
+				return fmt.Errorf("title can not be an empty string")
+			}
+			return nil
+		},
+	},
+	&cli.StringFlag{
+		Name:    "series",
+		Aliases: []string{"se"},
+		Usage:   "the name of the `series` the book belongs to",
+		Value:   "",
+	},
+	&cli.TimestampFlag{
+		Name:    "start",
+		Aliases: []string{"s"},
+		Usage:   "the `date` you started the book",
+		Value:   time.Now(),
+		Config: cli.TimestampConfig{
+			Timezone: time.Local,
+			Layouts:  []string{"2006-01-02T15:04:05"},
+		},
+		DefaultText: "now",
+	},
+	&cli.StringSliceFlag{
+		Name:    "genres",
+		Aliases: []string{"g"},
+		Usage:   "a list of comma separated genres `genre1,genre2`",
+		Value:   nil,
+	},
+}
+
+// TODO: at the moment we build a Book obj and then write it to the db
+// do we want to maybe just write it to the db straight
 var CMD = &cli.Command{
 	Name:  "bookTracker",
 	Usage: "track your books locally",
@@ -100,6 +161,7 @@ var CMD = &cli.Command{
 				fmt.Printf("args: %s\n", c.Args())
 				fmt.Printf("author: %s\n", c.String("author"))
 				fmt.Printf("start: %s\n", c.Timestamp("start"))
+				fmt.Printf("genres: %s\n", c.StringSlice("genres"))
 				return nil
 			},
 		},
@@ -109,9 +171,32 @@ var CMD = &cli.Command{
 			Action: defaultAction,
 		},
 		{
-			Name:   "start",
-			Usage:  "start a book",
-			Action: defaultAction,
+			Name:  "start",
+			Usage: "start a book",
+			Flags: startFlags,
+			Action: func(ctx context.Context, c *cli.Command) error {
+				fmt.Printf("TODO: '%s'\n", c.Name)
+				return nil
+				book := Book{
+					ISBN:    c.String("isbn"),
+					Author:  c.String("author"),
+					Title:   c.String("title"),
+					Series:  c.String("series"),
+					Status:  BS_READING,
+					Started: c.Timestamp("start"),
+				}
+				genres := c.StringSlice("genres")
+				if genres != nil {
+					book.Genres = genres
+				}
+				db := ctx.Value(myCtx{}).(ctxValues)[cv_db].(*sql.DB)
+				query := "INSERT INTO books (isbn, author, title, series, date_started, status, genres) VALUES(?, ?, ?, ?, ?, ?, ?)"
+				_, err := db.Exec(query, book.ISBN, book.Author, book.Title, book.Series, book.Started.Unix(), book.Status, strings.Join(book.Genres, ","))
+				if err != nil {
+					return err
+				}
+				return nil
+			},
 		},
 		{
 			Name:   "list",
