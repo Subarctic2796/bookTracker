@@ -3,9 +3,9 @@ A simple cli and web app(?) where I keep track of the books I have read
 
 # Usage
 ```sh
-git clone --depth=1 /bookTracker/url
+git clone --depth=1 https://github.com/Subarctic2796/bookTracker.git
 cd bookTracker
-make build
+go build -o bookTracker src/*.go
 ./bookTracker --help
 ```
 You can optionally add it to your path.
@@ -25,8 +25,9 @@ You can change where `bookTracker` looks for configuration by adding the `BOOK_T
 SQL schema:
 id|isbn|author|title|series|date started|date ended|reading status|genres
 
-API docs: https://openlibrary.org/dev/docs/api/search
-API url:  https://openlibrary.org/search.json
+Openlibrary
+[API docs](https://openlibrary.org/dev/docs/api/search)
+[API url](https://openlibrary.org/search.json)
 
 # Make API call
 ```go
