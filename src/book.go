@@ -39,3 +39,43 @@ func (b *Book) String() string {
 		b.Started, b.Finished, b.Took,
 		strings.Join(b.Genres, " "))
 }
+
+func validISBN(isbn string) bool {
+	data := make([]int, 0, 13)
+	for _, i := range strings.ToLower(isbn) {
+		if (i >= '0' && i <= '9') || i == 'x' {
+			if i == 'x' {
+				data = append(data, 10)
+			} else {
+				data = append(data, int(i-'0'))
+			}
+		}
+	}
+	return validate10(data) || validate13(data)
+}
+
+func validate10(isbn []int) bool {
+	if len(isbn) != 10 {
+		return false
+	}
+	sum := 0
+	for ix, i := range isbn {
+		sum += (10 - ix) * i
+	}
+	return sum%11 == 0
+}
+
+func validate13(isbn []int) bool {
+	if len(isbn) != 13 {
+		return false
+	}
+	sum := 0
+	for ix, i := range isbn {
+		if ix%2 == 0 {
+			sum += i
+		} else {
+			sum += 3 * i
+		}
+	}
+	return sum%10 == 0
+}
