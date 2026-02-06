@@ -3,16 +3,22 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 	"log"
 	"os"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func InitDB() (*sql.DB, error) {
+func initDB() (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", "books.db")
 	if err != nil {
 		return nil, err
+	}
+
+	if _, err := os.Stat("books.db"); errors.Is(err, os.ErrNotExist) {
+		fmt.Println("INFO: 'books.db' does not exist, creating 'books.db'")
 	}
 
 	const CREATESCHEMAQUERY = `CREATE TABLE IF NOT EXISTS books (
@@ -45,7 +51,7 @@ type myCtx struct{}
 type ctxValues [cv_CNT]any
 
 func main() {
-	db, err := InitDB()
+	db, err := initDB()
 	if err != nil {
 		log.Fatal(err)
 	}

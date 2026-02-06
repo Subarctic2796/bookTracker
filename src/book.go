@@ -40,11 +40,15 @@ func (b *Book) String() string {
 		strings.Join(b.Genres, " "))
 }
 
+func cleanISBN(isbn string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(isbn, "-", ""), " ", "")
+}
+
 func validISBN(isbn string) bool {
 	data := make([]int, 0, 13)
-	for _, i := range strings.ToLower(isbn) {
-		if (i >= '0' && i <= '9') || i == 'x' {
-			if i == 'x' {
+	for _, i := range isbn {
+		if (i >= '0' && i <= '9') || (i == 'x' || i == 'X') {
+			if i == 'x' || i == 'X' {
 				data = append(data, 10)
 			} else {
 				data = append(data, int(i-'0'))

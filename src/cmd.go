@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"io"
 	"math"
+	"net/http"
 	"strings"
 	"time"
 
@@ -23,8 +26,6 @@ var defaultAction = func(_ context.Context, c *cli.Command) error {
 }
 
 var requireAuthorTitleOrISBN = func(c *cli.Command) error {
-	// TODO: allow using ISBN number instead of author and title
-
 	title := c.StringArg("title")
 	if c.Bool("ISBN") {
 		if validISBN(title) {
@@ -145,6 +146,28 @@ var updateFlags = []cli.Flag{
 		Value: "",
 	},
 	&cli.StringFlag{
+		Name:    "author",
+		Aliases: []string{"a"},
+		Usage:   "the `author` who wrote the book",
+		Action: func(ctx context.Context, c *cli.Command, s string) error {
+			if s == "" {
+				return fmt.Errorf("author can not be empty")
+			}
+			return nil
+		},
+	},
+	&cli.StringFlag{
+		Name:    "title",
+		Aliases: []string{"t"},
+		Usage:   "the `title` of the book",
+		Action: func(ctx context.Context, c *cli.Command, s string) error {
+			if s == "" {
+				return fmt.Errorf("title can not be empty")
+			}
+			return nil
+		},
+	},
+	&cli.StringFlag{
 		Name:    "series",
 		Aliases: []string{"se"},
 		Usage:   "the name of the `series` the book belongs to",
@@ -217,10 +240,10 @@ var CMD = &cli.Command{
 			ArgsUsage: "[[title author]|ISBN]",
 			Flags:     addFlags,
 			Action: func(ctx context.Context, c *cli.Command) error {
-				c.IsSet("isbn")
 				if err := requireAuthorTitleOrISBN(c); err != nil {
 					return err
 				}
+
 				fmt.Printf("args: %s\n", c.Args())
 				fmt.Printf("start: %s\n", c.Timestamp("start"))
 				fmt.Printf("genres: %s\n", c.StringSlice("genres"))
@@ -241,30 +264,47 @@ var CMD = &cli.Command{
 			ArgsUsage: "[[title author]|ISBN]",
 			Flags:     startFlags,
 			Action: func(ctx context.Context, c *cli.Command) error {
-				// fmt.Printf("TODO: '%s'\n", c.Name)
 				if err := requireAuthorTitleOrISBN(c); err != nil {
 					return err
 				}
 
-				// for ix, i := range c.Flags {
-				// 	fmt.Printf("%d: %s: %v\n", ix, i.Names(), i.Get())
-				// }
+				isbnSet := c.IsSet("ISBN")
+				isbn := ""
+				if isbnSet && c.IsSet("isbn") {
+					globalISBN, localISBN := c.StringArg("title"), c.String("isbn")
+					cleanGlobal, cleanLocal := cleanISBN(globalISBN), cleanISBN(localISBN)
+					if cleanGlobal != cleanLocal {
+						return fmt.Errorf(
+							"isbn was set twice and they do not match: ISBN = '%s' isbn = '%s'",
+							globalISBN, localISBN)
+					}
+					isbn = cleanISBN(c.StringArg("title"))
+				}
+
+				title, author := c.StringArg("title"), c.StringArg("author")
+				if isbnSet {
+					title, author = "", ""
+				}
 
 				book := Book{
-					ISBN:    c.String("isbn"),
-					Author:  c.StringArg("author"),
-					Title:   c.StringArg("title"),
+					ISBN:    isbn,
+					Author:  author,
+					Title:   title,
 					Series:  c.String("series"),
 					Status:  BS_READING,
 					Started: c.Timestamp("start"),
 				}
+
 				genres := c.StringSlice("genres")
 				if genres != nil {
 					book.Genres = genres
 				}
+
 				db := ctx.Value(myCtx{}).(ctxValues)[cv_db].(*sql.DB)
-				query := "INSERT INTO books (isbn, author, title, series, date_started, status, genres) VALUES(?, ?, ?, ?, ?, ?, ?)"
-				_, err := db.Exec(query, book.ISBN, book.Author, book.Title, book.Series, book.Started.Unix(), book.Status, strings.Join(book.Genres, ","))
+				const QUERY = "INSERT INTO books (isbn, author, title, series, date_started, status, genres) VALUES(?, ?, ?, ?, ?, ?, ?)"
+				_, err := db.Exec(QUERY,
+					book.ISBN, book.Author, book.Title, book.Series,
+					book.Started.Unix(), book.Status, strings.Join(book.Genres, ","))
 				if err != nil {
 					return err
 				}
@@ -283,6 +323,53 @@ var CMD = &cli.Command{
 			ArgsUsage: "[[title author]|ISBN]",
 			Flags:     updateFlags,
 			Action:    defaultAction,
+		},
+		{
+			Name:      "remove",
+			Usage:     "remove a book from the database",
+			Arguments: commonArgs,
+			ArgsUsage: "[[title author]|ISBN]",
+			Action:    defaultAction,
+		},
+		{
+			Name:      "search",
+			Usage:     "lookup an ISBN number",
+			Arguments: []cli.Argument{&cli.StringArg{Name: "isbn"}},
+			Action: func(_ context.Context, c *cli.Command) error {
+				isbn := c.StringArg("isbn")
+				if !validISBN(isbn) {
+					return fmt.Errorf("'%s' is an invalid isbn number", isbn)
+				}
+
+				fmt.Printf("searching '%s' on openlibrary\n", isbn)
+				cleanISBN := strings.ReplaceAll(strings.ReplaceAll(isbn, "-", ""), " ", "")
+				query := fmt.Sprintf("https://openlibrary.org/search.json?q=%s&fields=title,author_name", cleanISBN)
+				resp, err := http.Get(query)
+				if err != nil {
+					panic(err)
+				}
+				fmt.Printf("successfully found '%s'\n", isbn)
+
+				body, err := io.ReadAll(resp.Body)
+				if err != nil {
+					return err
+				}
+
+				var json_ struct {
+					Docs []struct {
+						Author_names []string `json:"author_name"`
+						Title        string   `json:"title"`
+					} `json:"docs"`
+				}
+				if err := json.Unmarshal(body, &json_); err != nil {
+					return err
+				}
+
+				docs0 := json_.Docs[0]
+				fmt.Println("author:", docs0.Author_names)
+				fmt.Println("title:", docs0.Title)
+				return nil
+			},
 		},
 	},
 }
