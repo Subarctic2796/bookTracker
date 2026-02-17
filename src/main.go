@@ -28,7 +28,7 @@ func initDB() (*sql.DB, error) {
 		title TEXT NOT NULL,
 		series TEXT,
 		date_started INTEGER,
-		date_finishied INTEGER,
+		date_finished INTEGER,
 		status INTEGER NOT NULL DEFAULT 0,
 		genres TEXT
 	);`
@@ -40,15 +40,7 @@ func initDB() (*sql.DB, error) {
 	return db, nil
 }
 
-type ctxValue byte
-
-const (
-	cv_db ctxValue = iota
-	cv_CNT
-)
-
 type myCtx struct{}
-type ctxValues [cv_CNT]any
 
 func main() {
 	db, err := initDB()
@@ -58,9 +50,8 @@ func main() {
 	defer db.Close()
 
 	mainCtx := myCtx{}
-	ctx := context.WithValue(context.Background(), mainCtx, ctxValues{db})
+	ctx := context.WithValue(context.Background(), mainCtx, db)
 
-	// if err := CMD.Run(context.Background(), os.Args); err != nil {
 	if err := CMD.Run(ctx, os.Args); err != nil {
 		log.Fatal(err)
 	}

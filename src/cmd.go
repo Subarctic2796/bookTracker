@@ -14,18 +14,18 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-var defaultAction = func(_ context.Context, c *cli.Command) error {
+func defaultAction(_ context.Context, c *cli.Command) error {
 	fmt.Println("TODO:", c.Name)
 	fmt.Println("isbn:", c.IsSet("isbn"))
-	lenght := c.Args().Len()
-	padding := 1 + int(math.Log10(float64(lenght)))
-	for ix := range lenght {
+	length := c.Args().Len()
+	padding := 1 + int(math.Log10(float64(length)))
+	for ix := range length {
 		fmt.Printf("arg %*d: '%v'\n", padding, ix, c.Args().Get(ix))
 	}
 	return nil
 }
 
-var requireAuthorTitleOrISBN = func(c *cli.Command) error {
+func requireAuthorTitleOrISBN(c *cli.Command) error {
 	title := c.StringArg("title")
 	if c.Bool("ISBN") {
 		if validISBN(title) {
@@ -42,6 +42,17 @@ var requireAuthorTitleOrISBN = func(c *cli.Command) error {
 		return fmt.Errorf("author must be provided or use '-I ISBN'")
 	}
 	return nil
+}
+
+func validStateAction(ctx context.Context, c *cli.Command, s string) error {
+	switch strings.ToLower(s) {
+	case "none", "reading", "finished", "tbr", "dnf":
+		return nil
+	default:
+		return fmt.Errorf(
+			"'%s' is not a valid state for a book, state must be one of 'none' 'reading' 'finished' 'tbr' 'dnf'",
+			s)
+	}
 }
 
 var commonArgs = []cli.Argument{
@@ -67,19 +78,10 @@ var addFlags = []cli.Flag{
 		Value:       "none",
 		Usage:       "the `state` of the book, must be one of 'none' 'reading' 'finished' 'tbr' 'dnf'",
 		DefaultText: "none",
-		Action: func(ctx context.Context, c *cli.Command, s string) error {
-			switch strings.ToLower(s) {
-			case "none", "reading", "finished", "tbr", "dnf":
-				return nil
-			default:
-				return fmt.Errorf(
-					"'%s' is not a valid state for a book, state must be one of 'none' 'reading' 'finished' 'tbr' 'dnf'",
-					s)
-			}
-		},
+		Action:      validStateAction,
 	},
 	&cli.TimestampFlag{
-		Name:    "start",
+		Name:    "started",
 		Aliases: []string{"s"},
 		Usage:   "the `date` you started the book",
 		Value:   time.Now(),
@@ -121,7 +123,7 @@ var startFlags = []cli.Flag{
 		Value:   "",
 	},
 	&cli.TimestampFlag{
-		Name:    "start",
+		Name:    "started",
 		Aliases: []string{"s"},
 		Usage:   "the `date` you started the book",
 		Value:   time.Now(),
@@ -179,19 +181,10 @@ var updateFlags = []cli.Flag{
 		Value:       "none",
 		Usage:       "the `state` of the book, must be one of 'none' 'reading' 'finished' 'tbr' 'dnf'",
 		DefaultText: "none",
-		Action: func(ctx context.Context, c *cli.Command, s string) error {
-			switch strings.ToLower(s) {
-			case "none", "reading", "finished", "tbr", "dnf":
-				return nil
-			default:
-				return fmt.Errorf(
-					"'%s' is not a valid state for a book, state must be one of 'none' 'reading' 'finished' 'tbr' 'dnf'",
-					s)
-			}
-		},
+		Action:      validStateAction,
 	},
 	&cli.TimestampFlag{
-		Name:    "start",
+		Name:    "started",
 		Aliases: []string{"s"},
 		Usage:   "the `date` you started the book",
 		Value:   time.Now(),
@@ -231,6 +224,11 @@ var CMD = &cli.Command{
 			Aliases: []string{"I"},
 			Usage:   "use ISBN instead of title and author pair",
 		},
+		&cli.BoolFlag{
+			Name:    "lookup",
+			Aliases: []string{"L"},
+			Usage:   "use openlibrary to look up details about a book and add those details to the database",
+		},
 	},
 	Commands: []*cli.Command{
 		{
@@ -269,21 +267,40 @@ var CMD = &cli.Command{
 				}
 
 				isbnSet := c.IsSet("ISBN")
-				isbn := ""
-				if isbnSet && c.IsSet("isbn") {
-					globalISBN, localISBN := c.StringArg("title"), c.String("isbn")
-					cleanGlobal, cleanLocal := cleanISBN(globalISBN), cleanISBN(localISBN)
-					if cleanGlobal != cleanLocal {
-						return fmt.Errorf(
-							"isbn was set twice and they do not match: ISBN = '%s' isbn = '%s'",
-							globalISBN, localISBN)
+				isbn, title, author := "", c.StringArg("title"), c.StringArg("author")
+				if isbnSet {
+					if c.IsSet("isbn") {
+						localISBN := c.String("isbn")
+						if cleanISBN(title) != cleanISBN(localISBN) {
+							return fmt.Errorf(
+								"isbn was set twice and they do not match: ISBN = '%s' isbn = '%s'",
+								title, localISBN)
+						}
 					}
-					isbn = cleanISBN(c.StringArg("title"))
+					isbn = cleanISBN(title)
+					title, author = "", ""
 				}
 
-				title, author := c.StringArg("title"), c.StringArg("author")
+				db := ctx.Value(myCtx{}).(*sql.DB)
+				// check if the book has already exists
 				if isbnSet {
-					title, author = "", ""
+					const QUERY = "SELECT isbn FROM books WHERE isbn LIKE ?"
+					rows, err := db.Query(QUERY, isbn)
+					if err != nil {
+						return err
+					}
+					defer rows.Close()
+
+					for rows.Next() {
+						var isbn string
+						err = rows.Scan(&isbn)
+						if err != nil {
+							return err
+						}
+						fmt.Println(isbn)
+					}
+				} else {
+					return fmt.Errorf("TODO: look for author and title")
 				}
 
 				book := Book{
@@ -300,7 +317,6 @@ var CMD = &cli.Command{
 					book.Genres = genres
 				}
 
-				db := ctx.Value(myCtx{}).(ctxValues)[cv_db].(*sql.DB)
 				const QUERY = "INSERT INTO books (isbn, author, title, series, date_started, status, genres) VALUES(?, ?, ?, ?, ?, ?, ?)"
 				_, err := db.Exec(QUERY,
 					book.ISBN, book.Author, book.Title, book.Series,

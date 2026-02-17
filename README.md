@@ -25,6 +25,9 @@ You can change where `bookTracker` looks for configuration by adding the `BOOK_T
 SQL schema:
 id|isbn|author|title|series|date started|date ended|reading status|genres
 
+good omens isbn: 057504800X
+rhythm of war isbn: 9780765326386
+
 Openlibrary
 [API docs](https://openlibrary.org/dev/docs/api/search)
 [API url](https://openlibrary.org/search.json)

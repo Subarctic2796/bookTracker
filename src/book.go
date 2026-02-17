@@ -45,6 +45,9 @@ func cleanISBN(isbn string) string {
 }
 
 func validISBN(isbn string) bool {
+	if len(isbn) < 10 {
+		return false
+	}
 	data := make([]int, 0, 13)
 	for _, i := range isbn {
 		if (i >= '0' && i <= '9') || (i == 'x' || i == 'X') {
