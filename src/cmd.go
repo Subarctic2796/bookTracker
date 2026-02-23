@@ -282,9 +282,9 @@ var CMD = &cli.Command{
 				}
 
 				db := ctx.Value(myCtx{}).(*sql.DB)
-				// check if the book has already exists
+				// check if the book already exists
 				if isbnSet {
-					const QUERY = "SELECT isbn FROM books WHERE isbn LIKE ?"
+					const QUERY = "SELECT isbn FROM books WHERE isbn = ?"
 					rows, err := db.Query(QUERY, isbn)
 					if err != nil {
 						return err
@@ -292,28 +292,49 @@ var CMD = &cli.Command{
 					defer rows.Close()
 
 					for rows.Next() {
-						var isbn string
-						err = rows.Scan(&isbn)
+						var isbn_ sql.NullString
+						err = rows.Scan(&isbn_)
 						if err != nil {
 							return err
 						}
-						fmt.Println(isbn)
+						if isbn_.Valid {
+							return fmt.Errorf("book with isbn of '%s' already exists", isbn_.String)
+						}
 					}
 				} else {
-					return fmt.Errorf("TODO: look for author and title")
+					const QUERY = "SELECT title, author FROM books WHERE title = ? AND author = ?"
+					rows, err := db.Query(QUERY, strings.ToLower(title), strings.ToLower(author))
+					if err != nil {
+						return err
+					}
+					defer rows.Close()
+
+					for rows.Next() {
+						var title_, author_ string
+						err = rows.Scan(&title_, &author_)
+						if err != nil {
+							return err
+						}
+						if title_ == strings.ToLower(title) && author_ == strings.ToLower(author) {
+							return fmt.Errorf("book with title: '%s' and author: '%s' already exists", title, author)
+						}
+					}
 				}
 
 				book := Book{
 					ISBN:    isbn,
-					Author:  author,
-					Title:   title,
-					Series:  c.String("series"),
+					Author:  strings.ToLower(author),
+					Title:   strings.ToLower(title),
+					Series:  strings.ToLower(c.String("series")),
 					Status:  BS_READING,
 					Started: c.Timestamp("start"),
 				}
 
 				genres := c.StringSlice("genres")
 				if genres != nil {
+					for ix, i := range genres {
+						genres[ix] = strings.ToLower(i)
+					}
 					book.Genres = genres
 				}
 

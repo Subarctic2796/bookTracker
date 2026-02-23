@@ -29,7 +29,7 @@ func initDB() (*sql.DB, error) {
 		series TEXT,
 		date_started INTEGER,
 		date_finished INTEGER,
-		status INTEGER NOT NULL DEFAULT 0,
+		status INTEGER NOT NULL DEFAULT 1,
 		genres TEXT
 	);`
 
@@ -53,6 +53,6 @@ func main() {
 	ctx := context.WithValue(context.Background(), mainCtx, db)
 
 	if err := CMD.Run(ctx, os.Args); err != nil {
-		log.Fatal(err)
+		fmt.Println(err)
 	}
 }
