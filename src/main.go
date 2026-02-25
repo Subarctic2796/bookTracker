@@ -29,7 +29,7 @@ func initDB() (*sql.DB, error) {
 		series TEXT,
 		date_started INTEGER,
 		date_finished INTEGER,
-		status INTEGER NOT NULL DEFAULT 1,
+		status INTEGER NOT NULL DEFAULT 0,
 		genres TEXT
 	);`
 

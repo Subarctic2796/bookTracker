@@ -26,14 +26,17 @@ func defaultAction(_ context.Context, c *cli.Command) error {
 }
 
 func requireAuthorTitleOrISBN(c *cli.Command) error {
-	title := c.StringArg("title")
+	title, author := c.StringArg("title"), c.StringArg("author")
 	if c.Bool("ISBN") {
 		if validISBN(title) {
 			return nil
 		}
+		if author != "" {
+			return fmt.Errorf("author must not be set if using ISBN mode")
+		}
 		return fmt.Errorf("'%s' is not a valid ISBN number", title)
 	}
-	authorNotSet, titleNotSet := c.StringArg("author") == "", title == ""
+	authorNotSet, titleNotSet := author == "", title == ""
 	if authorNotSet && titleNotSet {
 		return fmt.Errorf("title and author must be provided or use '-I ISBN'")
 	} else if titleNotSet {
@@ -44,7 +47,30 @@ func requireAuthorTitleOrISBN(c *cli.Command) error {
 	return nil
 }
 
-func validStateAction(ctx context.Context, c *cli.Command, s string) error {
+// returns isbnSet, title, author, isbn, error in that order
+// It zeros title and author if ISBN is set
+func determineTitleAuthorISBNAndISBNisSet(c *cli.Command) (bool, string, string, string, error) {
+	isbnSet := c.IsSet("ISBN")
+	title, author := c.StringArg("title"), c.StringArg("author")
+	if isbnSet {
+		if !c.IsSet("isbn") {
+			return isbnSet, "", "", cleanISBN(title), nil
+		}
+		localISBN := c.String("isbn")
+		if cleanISBN(title) != cleanISBN(localISBN) {
+			return isbnSet, "", "", "", fmt.Errorf(
+				"isbn was set twice and they do not match: ISBN = '%s' isbn = '%s'",
+				title, localISBN)
+		}
+	}
+	if c.IsSet("isbn") && !validISBN(c.String("isbn")) {
+		return isbnSet, "", "", "", fmt.Errorf("'%s' is not a valid ISBN number", c.String("isbn"))
+
+	}
+	return isbnSet, title, author, cleanISBN(c.String("isbn")), nil
+}
+
+func validStateAction(_ context.Context, c *cli.Command, s string) error {
 	switch strings.ToLower(s) {
 	case "none", "reading", "finished", "tbr", "dnf":
 		return nil
@@ -141,6 +167,33 @@ var startFlags = []cli.Flag{
 	},
 }
 
+var finishFlags = []cli.Flag{
+	&cli.StringFlag{
+		Name:  "isbn",
+		Usage: "the `ISBN` number of the book",
+		Value: "",
+	},
+	&cli.TimestampFlag{
+		Name:    "finished",
+		Aliases: []string{"f"},
+		Usage:   "the `date` you finished the book",
+		Value:   time.Now(),
+		Config: cli.TimestampConfig{
+			Timezone: time.Local,
+			Layouts:  []string{"2006-01-02T15:04:05"},
+		},
+		DefaultText: "now",
+	},
+	&cli.StringFlag{
+		Name:        "state",
+		Aliases:     []string{"st"},
+		Value:       "none",
+		Usage:       "the `state` of the book, must be one of 'none' 'reading' 'finished' 'tbr' 'dnf'",
+		DefaultText: "none",
+		Action:      validStateAction,
+	},
+}
+
 var updateFlags = []cli.Flag{
 	&cli.StringFlag{
 		Name:  "isbn",
@@ -222,7 +275,7 @@ var CMD = &cli.Command{
 		&cli.BoolFlag{
 			Name:    "ISBN",
 			Aliases: []string{"I"},
-			Usage:   "use ISBN instead of title and author pair",
+			Usage:   "switches to ISBN mode, where only the isbn number can be used and not a title author pair",
 		},
 		&cli.BoolFlag{
 			Name:    "lookup",
@@ -243,7 +296,7 @@ var CMD = &cli.Command{
 				}
 
 				fmt.Printf("args: %s\n", c.Args())
-				fmt.Printf("start: %s\n", c.Timestamp("start"))
+				fmt.Printf("started: %s\n", c.Timestamp("started"))
 				fmt.Printf("genres: %s\n", c.StringSlice("genres"))
 				return nil
 			},
@@ -251,9 +304,76 @@ var CMD = &cli.Command{
 		{
 			Name:      "finish",
 			Usage:     "finish a book that you started",
-			ArgsUsage: "[[title author]|ISBN]",
 			Arguments: commonArgs,
-			Action:    defaultAction,
+			ArgsUsage: "[[title author]|ISBN]",
+			Flags:     finishFlags,
+			Action: func(ctx context.Context, c *cli.Command) error {
+				if err := requireAuthorTitleOrISBN(c); err != nil {
+					return err
+				}
+
+				isbnSet, title, author, isbn, err := determineTitleAuthorISBNAndISBNisSet(c)
+				if err != nil {
+					return err
+				}
+
+				state := BS_FINISHED
+				if c.IsSet("state") {
+					switch stateStr := c.String("state"); stateStr {
+					case "none", "tbr", "reading":
+						return fmt.Errorf("the status of a book you are finishing can not be '%s'", stateStr)
+					case "finished":
+						state = BS_FINISHED
+					case "dnf":
+						state = BS_DNF
+					}
+				}
+
+				db := ctx.Value(myCtx{}).(*sql.DB)
+				// check if the book already exists
+				if isbnSet {
+					QUERY := "SELECT EXISTS(SELECT 1 FROM books WHERE isbn = ?)"
+					row := db.QueryRow(QUERY, isbn)
+					if err != nil {
+						return err
+					}
+					var exists int
+					err = row.Scan(&exists)
+					if err != nil {
+						return err
+					}
+
+					if exists != 1 {
+						return fmt.Errorf("book with isbn of '%s' does not exist", isbn)
+					}
+
+					QUERY = "UPDATE books SET status = ?, date_finished = ? WHERE isbn = ?"
+					_, err = db.Exec(QUERY, state, c.Timestamp("finished").Unix(), isbn)
+					if err != nil {
+						return err
+					}
+				} else {
+					QUERY := "SELECT EXISTS(SELECT 1 FROM books WHERE title = ? AND author = ?)"
+					row := db.QueryRow(QUERY, strings.ToLower(title), strings.ToLower(author))
+					var exists int
+					err = row.Scan(&exists)
+					if err != nil {
+						return err
+					}
+
+					if exists != 1 {
+						return fmt.Errorf("book with title: '%s' and author '%s' does not exist", title, author)
+					}
+
+					QUERY = "UPDATE books SET status = ?, date_finished = ? WHERE title = ? AND author = ?"
+					_, err = db.Exec(QUERY, state, c.Timestamp("finished").Unix(), strings.ToLower(title), strings.ToLower(author))
+					if err != nil {
+						return err
+					}
+				}
+
+				return nil
+			},
 		},
 		{
 			Name:      "start",
@@ -266,58 +386,39 @@ var CMD = &cli.Command{
 					return err
 				}
 
-				isbnSet := c.IsSet("ISBN")
-				isbn, title, author := "", c.StringArg("title"), c.StringArg("author")
-				if isbnSet {
-					if c.IsSet("isbn") {
-						localISBN := c.String("isbn")
-						if cleanISBN(title) != cleanISBN(localISBN) {
-							return fmt.Errorf(
-								"isbn was set twice and they do not match: ISBN = '%s' isbn = '%s'",
-								title, localISBN)
-						}
-					}
-					isbn = cleanISBN(title)
-					title, author = "", ""
+				isbnSet, title, author, isbn, err := determineTitleAuthorISBNAndISBNisSet(c)
+				if err != nil {
+					return err
 				}
 
 				db := ctx.Value(myCtx{}).(*sql.DB)
 				// check if the book already exists
 				if isbnSet {
-					const QUERY = "SELECT isbn FROM books WHERE isbn = ?"
-					rows, err := db.Query(QUERY, isbn)
+					const QUERY = "SELECT EXISTS(SELECT 1 FROM books WHERE isbn = ?)"
+					row := db.QueryRow(QUERY, isbn)
 					if err != nil {
 						return err
 					}
-					defer rows.Close()
+					var exists int
+					err = row.Scan(&exists)
+					if err != nil {
+						return err
+					}
 
-					for rows.Next() {
-						var isbn_ sql.NullString
-						err = rows.Scan(&isbn_)
-						if err != nil {
-							return err
-						}
-						if isbn_.Valid {
-							return fmt.Errorf("book with isbn of '%s' already exists", isbn_.String)
-						}
+					if exists == 1 {
+						return fmt.Errorf("book with isbn of '%s' already exists", isbn)
 					}
 				} else {
-					const QUERY = "SELECT title, author FROM books WHERE title = ? AND author = ?"
-					rows, err := db.Query(QUERY, strings.ToLower(title), strings.ToLower(author))
+					const QUERY = "SELECT EXISTS(SELECT 1 FROM books WHERE title = ? AND author = ?)"
+					row := db.QueryRow(QUERY, strings.ToLower(title), strings.ToLower(author))
+					var exists int
+					err = row.Scan(&exists)
 					if err != nil {
 						return err
 					}
-					defer rows.Close()
 
-					for rows.Next() {
-						var title_, author_ string
-						err = rows.Scan(&title_, &author_)
-						if err != nil {
-							return err
-						}
-						if title_ == strings.ToLower(title) && author_ == strings.ToLower(author) {
-							return fmt.Errorf("book with title: '%s' and author: '%s' already exists", title, author)
-						}
+					if exists == 1 {
+						return fmt.Errorf("book with title: '%s' and author '%s' already exists", title, author)
 					}
 				}
 
@@ -327,7 +428,7 @@ var CMD = &cli.Command{
 					Title:   strings.ToLower(title),
 					Series:  strings.ToLower(c.String("series")),
 					Status:  BS_READING,
-					Started: c.Timestamp("start"),
+					Started: c.Timestamp("started"),
 				}
 
 				genres := c.StringSlice("genres")
@@ -339,7 +440,7 @@ var CMD = &cli.Command{
 				}
 
 				const QUERY = "INSERT INTO books (isbn, author, title, series, date_started, status, genres) VALUES(?, ?, ?, ?, ?, ?, ?)"
-				_, err := db.Exec(QUERY,
+				_, err = db.Exec(QUERY,
 					book.ISBN, book.Author, book.Title, book.Series,
 					book.Started.Unix(), book.Status, strings.Join(book.Genres, ","))
 				if err != nil {
