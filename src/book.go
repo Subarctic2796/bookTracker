@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 type BookState byte
@@ -29,15 +32,32 @@ type Book struct {
 	Finished time.Time
 	Status   BookState
 	Genres   []string
-	Took     time.Time
+	Took     time.Duration
 }
 
+// make sure to reset b4 using
+var CASER = cases.Title(language.Und)
+
 func (b *Book) String() string {
-	return fmt.Sprintf(
-		"Title   : %s\nSeries:  %s\nAuthor  : %s\nISBN    : %s\nStatus  : %s\nStarted : %s\nFinished: %s\nTook    : %s\nGenres  : %s",
-		b.Title, b.Series, b.Author, b.ISBN, b.Status,
-		b.Started, b.Finished, b.Took,
-		strings.Join(b.Genres, " "))
+	CASER.Reset()
+	var sb strings.Builder
+
+	fmt.Fprintf(&sb, "Title   : %s\n", CASER.String(b.Title))
+	CASER.Reset()
+
+	fmt.Fprintf(&sb, "Series  : %s\n", CASER.String(b.Series))
+	CASER.Reset()
+
+	fmt.Fprintf(&sb, "Author  : %s\n", CASER.String(b.Author))
+	CASER.Reset()
+
+	fmt.Fprintf(&sb, "ISBN    : %s\n", b.ISBN)
+	fmt.Fprintf(&sb, "Status  : %s\n", b.Status)
+	fmt.Fprintf(&sb, "Started : %s\n", b.Started)
+	fmt.Fprintf(&sb, "Finished: %s\n", b.Finished)
+	fmt.Fprintf(&sb, "Took    : %s\n", b.Took)
+	fmt.Fprintf(&sb, "Genres  : %s", strings.Join(b.Genres, ", "))
+	return sb.String()
 }
 
 func cleanISBN(isbn string) string {

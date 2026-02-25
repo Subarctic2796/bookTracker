@@ -86,121 +86,13 @@ var commonArgs = []cli.Argument{
 	&cli.StringArg{Name: "author"},
 }
 
-var addFlags = []cli.Flag{
-	&cli.StringFlag{
+var (
+	isbnFlag = &cli.StringFlag{
 		Name:  "isbn",
 		Usage: "the `ISBN` number of the book",
 		Value: "",
-	},
-	&cli.StringFlag{
-		Name:    "series",
-		Aliases: []string{"se"},
-		Usage:   "the name of the `series` the book belongs to",
-		Value:   "",
-	},
-	&cli.StringFlag{
-		Name:        "state",
-		Aliases:     []string{"st"},
-		Value:       "none",
-		Usage:       "the `state` of the book, must be one of 'none' 'reading' 'finished' 'tbr' 'dnf'",
-		DefaultText: "none",
-		Action:      validStateAction,
-	},
-	&cli.TimestampFlag{
-		Name:    "started",
-		Aliases: []string{"s"},
-		Usage:   "the `date` you started the book",
-		Value:   time.Now(),
-		Config: cli.TimestampConfig{
-			Timezone: time.Local,
-			Layouts:  []string{"2006-01-02T15:04:05"},
-		},
-		DefaultText: "now",
-	},
-	&cli.TimestampFlag{
-		Name:    "finished",
-		Aliases: []string{"f"},
-		Usage:   "the `date` you finished the book",
-		Value:   time.Now(),
-		Config: cli.TimestampConfig{
-			Timezone: time.Local,
-			Layouts:  []string{"2006-01-02T15:04:05"},
-		},
-		DefaultText: "now",
-	},
-	&cli.StringSliceFlag{
-		Name:    "genres",
-		Aliases: []string{"g"},
-		Usage:   "a list of comma separated genres `genre1,genre2`",
-		Value:   nil,
-	},
-}
-
-var startFlags = []cli.Flag{
-	&cli.StringFlag{
-		Name:  "isbn",
-		Usage: "the `ISBN` number of the book",
-		Value: "",
-	},
-	&cli.StringFlag{
-		Name:    "series",
-		Aliases: []string{"se"},
-		Usage:   "the name of the `series` the book belongs to",
-		Value:   "",
-	},
-	&cli.TimestampFlag{
-		Name:    "started",
-		Aliases: []string{"s"},
-		Usage:   "the `date` you started the book",
-		Value:   time.Now(),
-		Config: cli.TimestampConfig{
-			Timezone: time.Local,
-			Layouts:  []string{"2006-01-02T15:04:05"},
-		},
-		DefaultText: "now",
-	},
-	&cli.StringSliceFlag{
-		Name:    "genres",
-		Aliases: []string{"g"},
-		Usage:   "a list of comma separated genres `genre1,genre2`",
-		Value:   nil,
-	},
-}
-
-var finishFlags = []cli.Flag{
-	&cli.StringFlag{
-		Name:  "isbn",
-		Usage: "the `ISBN` number of the book",
-		Value: "",
-	},
-	&cli.TimestampFlag{
-		Name:    "finished",
-		Aliases: []string{"f"},
-		Usage:   "the `date` you finished the book",
-		Value:   time.Now(),
-		Config: cli.TimestampConfig{
-			Timezone: time.Local,
-			Layouts:  []string{"2006-01-02T15:04:05"},
-		},
-		DefaultText: "now",
-	},
-	&cli.StringFlag{
-		Name:        "state",
-		Aliases:     []string{"st"},
-		Value:       "none",
-		Usage:       "the `state` of the book, must be one of 'none' 'reading' 'finished' 'tbr' 'dnf'",
-		DefaultText: "none",
-		Action:      validStateAction,
-	},
-}
-
-var updateFlags = []cli.Flag{
-	&cli.StringFlag{
-		Name:  "isbn",
-		Usage: "the `ISBN` number of the book",
-		Value: "",
-	},
-	&cli.StringFlag{
+	}
+	authorFlag = &cli.StringFlag{
 		Name:    "author",
 		Aliases: []string{"a"},
 		Usage:   "the `author` who wrote the book",
@@ -210,8 +102,8 @@ var updateFlags = []cli.Flag{
 			}
 			return nil
 		},
-	},
-	&cli.StringFlag{
+	}
+	titleFlag = &cli.StringFlag{
 		Name:    "title",
 		Aliases: []string{"t"},
 		Usage:   "the `title` of the book",
@@ -221,22 +113,22 @@ var updateFlags = []cli.Flag{
 			}
 			return nil
 		},
-	},
-	&cli.StringFlag{
+	}
+	seriesFlag = &cli.StringFlag{
 		Name:    "series",
 		Aliases: []string{"se"},
 		Usage:   "the name of the `series` the book belongs to",
 		Value:   "",
-	},
-	&cli.StringFlag{
+	}
+	stateFlag = &cli.StringFlag{
 		Name:        "state",
 		Aliases:     []string{"st"},
 		Value:       "none",
 		Usage:       "the `state` of the book, must be one of 'none' 'reading' 'finished' 'tbr' 'dnf'",
 		DefaultText: "none",
 		Action:      validStateAction,
-	},
-	&cli.TimestampFlag{
+	}
+	startedFlag = &cli.TimestampFlag{
 		Name:    "started",
 		Aliases: []string{"s"},
 		Usage:   "the `date` you started the book",
@@ -246,8 +138,8 @@ var updateFlags = []cli.Flag{
 			Layouts:  []string{"2006-01-02T15:04:05"},
 		},
 		DefaultText: "now",
-	},
-	&cli.TimestampFlag{
+	}
+	finishedFlag = &cli.TimestampFlag{
 		Name:    "finished",
 		Aliases: []string{"f"},
 		Usage:   "the `date` you finished the book",
@@ -257,13 +149,46 @@ var updateFlags = []cli.Flag{
 			Layouts:  []string{"2006-01-02T15:04:05"},
 		},
 		DefaultText: "now",
-	},
-	&cli.StringSliceFlag{
+	}
+	genresFlag = &cli.StringSliceFlag{
 		Name:    "genres",
 		Aliases: []string{"g"},
 		Usage:   "a list of comma separated genres `genre1,genre2`",
 		Value:   nil,
-	},
+	}
+)
+
+var addFlags = []cli.Flag{
+	isbnFlag,
+	seriesFlag,
+	stateFlag,
+	startedFlag,
+	finishedFlag,
+	genresFlag,
+}
+
+var startFlags = []cli.Flag{
+	isbnFlag,
+	seriesFlag,
+	startedFlag,
+	genresFlag,
+}
+
+var finishFlags = []cli.Flag{
+	isbnFlag,
+	finishedFlag,
+	stateFlag,
+}
+
+var updateFlags = []cli.Flag{
+	isbnFlag,
+	seriesFlag,
+	stateFlag,
+	startedFlag,
+	finishedFlag,
+	genresFlag,
+	authorFlag,
+	titleFlag,
 }
 
 // TODO: at the moment we build a Book obj and then write it to the db
@@ -450,9 +375,53 @@ var CMD = &cli.Command{
 			},
 		},
 		{
-			Name:   "list",
-			Usage:  "list out all of the books in the database",
-			Action: defaultAction,
+			Name:  "list",
+			Usage: "list out all of the books in the database",
+			Action: func(ctx context.Context, c *cli.Command) error {
+				db := ctx.Value(myCtx{}).(*sql.DB)
+
+				const QUERY = "SELECT * FROM books"
+				rows, err := db.Query(QUERY)
+				if err != nil {
+					return err
+				}
+				defer rows.Close()
+
+				for rows.Next() {
+					var id, status int
+					var date_started, date_finished sql.NullInt64
+					var isbn, title, author, series, genres string
+					err = rows.Scan(&id, &isbn, &author, &title, &series, &date_started, &date_finished, &status, &genres)
+					if err != nil {
+						return err
+					}
+
+					started := time.Time{}
+					if date_started.Valid {
+						started = time.Unix(date_started.Int64, 0).Local()
+					}
+					finished := time.Time{}
+					if date_finished.Valid {
+						finished = time.Unix(date_finished.Int64, 0).Local()
+					}
+
+					book := Book{
+						ISBN:     isbn,
+						Author:   author,
+						Title:    title,
+						Series:   series,
+						Started:  started,
+						Finished: finished,
+						Status:   BookState(status),
+						Genres:   strings.Split(genres, ","),
+						Took:     finished.Sub(started),
+					}
+					fmt.Println(book.String())
+					fmt.Println()
+				}
+
+				return nil
+			},
 		},
 		{
 			Name:      "update",
