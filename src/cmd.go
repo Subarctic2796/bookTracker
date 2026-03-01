@@ -375,6 +375,7 @@ var CMD = &cli.Command{
 			},
 		},
 		{
+			// add toggle for fine grain times
 			Name:  "list",
 			Usage: "list out all of the books in the database",
 			Action: func(ctx context.Context, c *cli.Command) error {
@@ -416,6 +417,7 @@ var CMD = &cli.Command{
 						Genres:   strings.Split(genres, ","),
 						Took:     finished.Sub(started),
 					}
+
 					fmt.Println(book.String())
 					fmt.Println()
 				}

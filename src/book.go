@@ -23,6 +23,16 @@ func (s BookState) String() string {
 	return [...]string{"NONE", "READING", "FINISHED", "TBR", "DNF"}[s]
 }
 
+func (s BookState) Emoji() string {
+	return [...]string{
+		"NONE",
+		// reading:
+		// finished:
+		// tbr:
+		// dnf:
+	}[s]
+}
+
 type Book struct {
 	ISBN     string
 	Author   string
@@ -41,6 +51,15 @@ var CASER = cases.Title(language.Und)
 func (b *Book) String() string {
 	CASER.Reset()
 	var sb strings.Builder
+	zeroTime := time.Time{}
+
+	// title
+	// series
+	// author
+	// status
+	// genres
+	// started finished took
+	// isbn
 
 	fmt.Fprintf(&sb, "Title   : %s\n", CASER.String(b.Title))
 	CASER.Reset()
@@ -51,12 +70,24 @@ func (b *Book) String() string {
 	fmt.Fprintf(&sb, "Author  : %s\n", CASER.String(b.Author))
 	CASER.Reset()
 
-	fmt.Fprintf(&sb, "ISBN    : %s\n", b.ISBN)
-	fmt.Fprintf(&sb, "Status  : %s\n", b.Status)
-	fmt.Fprintf(&sb, "Started : %s\n", b.Started)
-	fmt.Fprintf(&sb, "Finished: %s\n", b.Finished)
-	fmt.Fprintf(&sb, "Took    : %s\n", b.Took)
+	fmt.Fprintf(&sb, "Status  : %s\n", b.Status) // emoji
 	fmt.Fprintf(&sb, "Genres  : %s", strings.Join(b.Genres, ", "))
+
+	// TODO: need to convert to local time
+	startedStr := b.Started.String()
+	if b.Started.Equal(zeroTime) {
+		startedStr = "--"
+	}
+	fmt.Fprintf(&sb, "Started : %s\n", startedStr)
+
+	finishedStr := b.Finished.String()
+	if b.Finished.Equal(zeroTime) {
+		finishedStr = "--"
+	}
+	fmt.Fprintf(&sb, "Finished: %s\n", finishedStr)
+
+	fmt.Fprintf(&sb, "Took    : %s\n", b.Took)
+	fmt.Fprintf(&sb, "ISBN    : %s\n", b.ISBN)
 	return sb.String()
 }
 
