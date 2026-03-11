@@ -191,6 +191,17 @@ var updateFlags = []cli.Flag{
 	titleFlag,
 }
 
+var listFlags = []cli.Flag{
+	isbnFlag,
+	seriesFlag,
+	stateFlag,
+	startedFlag,
+	finishedFlag,
+	genresFlag,
+	authorFlag,
+	titleFlag,
+}
+
 // TODO: at the moment we build a Book obj and then write it to the db
 // do we want to maybe just write it to the db straight
 var CMD = &cli.Command{
@@ -378,6 +389,7 @@ var CMD = &cli.Command{
 			// add toggle for fine grain times
 			Name:  "list",
 			Usage: "list out all of the books in the database",
+			Flags: listFlags,
 			Action: func(ctx context.Context, c *cli.Command) error {
 				db := ctx.Value(myCtx{}).(*sql.DB)
 
