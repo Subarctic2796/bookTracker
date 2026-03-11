@@ -14,7 +14,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func defaultAction(_ context.Context, c *cli.Command) error {
+func DefaultAction(_ context.Context, c *cli.Command) error {
 	fmt.Println("TODO:", c.Name)
 	fmt.Println("isbn:", c.IsSet("isbn"))
 	length := c.Args().Len()
@@ -64,10 +64,10 @@ func determineTitleAuthorISBNAndISBNisSet(c *cli.Command) (bool, string, string,
 		}
 	}
 	if c.IsSet("isbn") && !validISBN(c.String("isbn")) {
-		return isbnSet, "", "", "", fmt.Errorf("'%s' is not a valid ISBN number", c.String("isbn"))
+		return false, "", "", "", fmt.Errorf("'%s' is not a valid ISBN number", c.String("isbn"))
 
 	}
-	return isbnSet, title, author, cleanISBN(c.String("isbn")), nil
+	return false, title, author, cleanISBN(c.String("isbn")), nil
 }
 
 func validStateAction(_ context.Context, c *cli.Command, s string) error {
@@ -78,6 +78,52 @@ func validStateAction(_ context.Context, c *cli.Command, s string) error {
 		return fmt.Errorf(
 			"'%s' is not a valid state for a book, state must be one of 'none' 'reading' 'finished' 'tbr' 'dnf'",
 			s)
+	}
+}
+
+func isbnExists(db *sql.DB, isbn string, shouldExist bool) error {
+	const QUERY = "SELECT EXISTS(SELECT 1 FROM books WHERE isbn = ?)"
+	row := db.QueryRow(QUERY, isbn)
+
+	var exists int
+	if err := row.Scan(&exists); err != nil {
+		return err
+	}
+
+	doesExist := exists == 1
+	if shouldExist {
+		if doesExist {
+			return nil
+		}
+		return fmt.Errorf("book with isbn: '%s' does not exist", isbn)
+	} else {
+		if doesExist {
+			return fmt.Errorf("book with isbn: '%s' already exists", isbn)
+		}
+		return nil
+	}
+}
+
+func titleAuthorExists(db *sql.DB, title, author string, shouldExist bool) error {
+	const QUERY = "SELECT EXISTS(SELECT 1 FROM books WHERE title = ? AND author = ?)"
+	row := db.QueryRow(QUERY, strings.ToLower(title), strings.ToLower(author))
+
+	var exists int
+	err := row.Scan(&exists)
+	if err != nil {
+		return err
+	}
+	doesExist := exists == 1
+	if shouldExist {
+		if doesExist {
+			return nil
+		}
+		return fmt.Errorf("book with title: '%s' and author: '%s' does not exist", title, author)
+	} else {
+		if doesExist {
+			return fmt.Errorf("book with title: '%s' and author: '%s' already exists", title, author)
+		}
+		return nil
 	}
 }
 
@@ -231,6 +277,7 @@ var CMD = &cli.Command{
 					return err
 				}
 
+				fmt.Println("TODO: 'add'")
 				fmt.Printf("args: %s\n", c.Args())
 				fmt.Printf("started: %s\n", c.Timestamp("started"))
 				fmt.Printf("genres: %s\n", c.StringSlice("genres"))
@@ -268,41 +315,22 @@ var CMD = &cli.Command{
 				db := ctx.Value(myCtx{}).(*sql.DB)
 				// check if the book already exists
 				if isbnSet {
-					QUERY := "SELECT EXISTS(SELECT 1 FROM books WHERE isbn = ?)"
-					row := db.QueryRow(QUERY, isbn)
-					if err != nil {
-						return err
-					}
-					var exists int
-					err = row.Scan(&exists)
-					if err != nil {
+					if err := isbnExists(db, isbn, true); err != nil {
 						return err
 					}
 
-					if exists != 1 {
-						return fmt.Errorf("book with isbn of '%s' does not exist", isbn)
-					}
-
-					QUERY = "UPDATE books SET status = ?, date_finished = ? WHERE isbn = ?"
-					_, err = db.Exec(QUERY, state, c.Timestamp("finished").Unix(), isbn)
+					const QUERY = "UPDATE books SET status = ?, date_finished = ? WHERE isbn = ?"
+					_, err := db.Exec(QUERY, state, c.Timestamp("finished").Unix(), isbn)
 					if err != nil {
 						return err
 					}
 				} else {
-					QUERY := "SELECT EXISTS(SELECT 1 FROM books WHERE title = ? AND author = ?)"
-					row := db.QueryRow(QUERY, strings.ToLower(title), strings.ToLower(author))
-					var exists int
-					err = row.Scan(&exists)
-					if err != nil {
+					if err := titleAuthorExists(db, title, author, true); err != nil {
 						return err
 					}
 
-					if exists != 1 {
-						return fmt.Errorf("book with title: '%s' and author '%s' does not exist", title, author)
-					}
-
-					QUERY = "UPDATE books SET status = ?, date_finished = ? WHERE title = ? AND author = ?"
-					_, err = db.Exec(QUERY, state, c.Timestamp("finished").Unix(), strings.ToLower(title), strings.ToLower(author))
+					const QUERY = "UPDATE books SET status = ?, date_finished = ? WHERE title = ? AND author = ?"
+					_, err := db.Exec(QUERY, state, c.Timestamp("finished").Unix(), strings.ToLower(title), strings.ToLower(author))
 					if err != nil {
 						return err
 					}
@@ -330,31 +358,12 @@ var CMD = &cli.Command{
 				db := ctx.Value(myCtx{}).(*sql.DB)
 				// check if the book already exists
 				if isbnSet {
-					const QUERY = "SELECT EXISTS(SELECT 1 FROM books WHERE isbn = ?)"
-					row := db.QueryRow(QUERY, isbn)
-					if err != nil {
+					if err := isbnExists(db, isbn, false); err != nil {
 						return err
-					}
-					var exists int
-					err = row.Scan(&exists)
-					if err != nil {
-						return err
-					}
-
-					if exists == 1 {
-						return fmt.Errorf("book with isbn of '%s' already exists", isbn)
 					}
 				} else {
-					const QUERY = "SELECT EXISTS(SELECT 1 FROM books WHERE title = ? AND author = ?)"
-					row := db.QueryRow(QUERY, strings.ToLower(title), strings.ToLower(author))
-					var exists int
-					err = row.Scan(&exists)
-					if err != nil {
+					if err := titleAuthorExists(db, title, author, false); err != nil {
 						return err
-					}
-
-					if exists == 1 {
-						return fmt.Errorf("book with title: '%s' and author '%s' already exists", title, author)
 					}
 				}
 
@@ -443,14 +452,85 @@ var CMD = &cli.Command{
 			Arguments: commonArgs,
 			ArgsUsage: "[[title author]|ISBN]",
 			Flags:     updateFlags,
-			Action:    defaultAction,
+			Action: func(ctx context.Context, c *cli.Command) error {
+				err := requireAuthorTitleOrISBN(c)
+				if err != nil {
+					return err
+				}
+
+				isbnSet, title, author, isbn, err := determineTitleAuthorISBNAndISBNisSet(c)
+				if err != nil {
+					return err
+				}
+
+				db := ctx.Value(myCtx{}).(*sql.DB)
+
+				if isbnSet {
+					if err := isbnExists(db, isbn, true); err != nil {
+						return err
+					}
+
+					const QUERY = "UPDATE books COL = ?, COL2 = ? WHERE isbn = ?"
+					_, err = db.Exec(QUERY, "", "", isbn)
+					if err != nil {
+						return err
+					}
+				} else {
+					if err := titleAuthorExists(db, title, author, true); err != nil {
+						return err
+					}
+
+					const QUERY = "UPDATE books COL = ?, COL2 = ? WHERE title = ? AND author = ?"
+					_, err = db.Exec(QUERY, "", "", strings.ToLower(title), strings.ToLower(author))
+					if err != nil {
+						return err
+					}
+				}
+				return nil
+			},
 		},
 		{
 			Name:      "remove",
 			Usage:     "remove a book from the database",
 			Arguments: commonArgs,
 			ArgsUsage: "[[title author]|ISBN]",
-			Action:    defaultAction,
+			Action: func(ctx context.Context, c *cli.Command) error {
+				err := requireAuthorTitleOrISBN(c)
+				if err != nil {
+					return err
+				}
+
+				isbnSet, title, author, isbn, err := determineTitleAuthorISBNAndISBNisSet(c)
+				if err != nil {
+					return err
+				}
+
+				db := ctx.Value(myCtx{}).(*sql.DB)
+
+				if isbnSet {
+					if err := isbnExists(db, isbn, true); err != nil {
+						return err
+					}
+
+					const QUERY = "DELETE FROM books WHERE isbn = ?"
+					_, err := db.Exec(QUERY, isbn)
+					if err != nil {
+						return err
+					}
+				} else {
+					if err := titleAuthorExists(db, title, author, true); err != nil {
+						return err
+					}
+
+					const QUERY = "DELETE FROM books WHERE title = ? AND author = ?"
+					_, err := db.Exec(QUERY, strings.ToLower(title), strings.ToLower(author))
+					if err != nil {
+						return err
+					}
+				}
+
+				return nil
+			},
 		},
 		{
 			Name:      "search",
