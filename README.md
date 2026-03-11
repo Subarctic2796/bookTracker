@@ -11,20 +11,26 @@ go build -o bookTracker src/*.go
 You can optionally add it to your path.
 It will automatically create a new sqlite database at `$XDG_DATA_HOME/bookTracker/books.db` or `$HOME/.local/share/bookTracker/books.db`
 You can change this by creating `$XDG_CONFIG_HOME/bookTracker/bookTracker.conf` or `$HOME/.config/bookTracker/bookTracker.conf`
-adding the line `db_path = /path/to/database`
-You can change where `bookTracker` looks for configuration by adding the `BOOK_TRACKER_CONFIG_HOME=/path/to/book/track/config/dir/bookTracker.conf`
+and adding the line `db_path = /path/to/database`
 
 # TODO
 [ ] add sqlite
+	[ ] add
+	[x] finish
+	[x] start
+	[ ] list
+	[ ] update
+	[x] remove
+	[ ]
 [ ] add creating db to `$HOME/.local/share/bookTracker/books.db`
 [ ] add checking config in `$HOME/.config/bookTracker`
-[ ] add reading `bookTracker.conf` in `BOOK_TRACKER_CONFIG_HOME`
-[ ] add checking for `BOOK_TRACKER_CONFIG_HOME`
+[ ] add windows support
 
 # Notes
 SQL schema:
 id|isbn|author|title|series|date started|date ended|reading status|genres
 
+# Dev Notes
 good omens isbn: 057504800X
 rhythm of war isbn: 9780765326386
 

@@ -52,17 +52,27 @@ func requireAuthorTitleOrISBN(c *cli.Command) error {
 func determineTitleAuthorISBNAndISBNisSet(c *cli.Command) (bool, string, string, string, error) {
 	isbnSet := c.IsSet("ISBN")
 	title, author := c.StringArg("title"), c.StringArg("author")
+
 	if isbnSet {
-		if !c.IsSet("isbn") {
-			return isbnSet, "", "", cleanISBN(title), nil
+		if c.IsSet("title") {
+			title = c.String("title")
 		}
+		if c.IsSet("author") {
+			author = c.String("author")
+		}
+
+		if !c.IsSet("isbn") {
+			return isbnSet, title, author, cleanISBN(title), nil
+		}
+
 		localISBN := c.String("isbn")
 		if cleanISBN(title) != cleanISBN(localISBN) {
-			return isbnSet, "", "", "", fmt.Errorf(
+			return false, "", "", "", fmt.Errorf(
 				"isbn was set twice and they do not match: ISBN = '%s' isbn = '%s'",
 				title, localISBN)
 		}
 	}
+
 	if c.IsSet("isbn") && !validISBN(c.String("isbn")) {
 		return false, "", "", "", fmt.Errorf("'%s' is not a valid ISBN number", c.String("isbn"))
 
@@ -206,10 +216,12 @@ var (
 
 var addFlags = []cli.Flag{
 	isbnFlag,
+	authorFlag,
+	titleFlag,
 	seriesFlag,
-	stateFlag,
 	startedFlag,
 	finishedFlag,
+	stateFlag,
 	genresFlag,
 }
 
@@ -267,20 +279,57 @@ var CMD = &cli.Command{
 	},
 	Commands: []*cli.Command{
 		{
-			Name:      "add",
-			Usage:     "add a new book",
+			Name:      "start",
+			Usage:     "start a book",
 			Arguments: commonArgs,
 			ArgsUsage: "[[title author]|ISBN]",
-			Flags:     addFlags,
+			Flags:     startFlags,
 			Action: func(ctx context.Context, c *cli.Command) error {
 				if err := requireAuthorTitleOrISBN(c); err != nil {
 					return err
 				}
 
-				fmt.Println("TODO: 'add'")
-				fmt.Printf("args: %s\n", c.Args())
-				fmt.Printf("started: %s\n", c.Timestamp("started"))
-				fmt.Printf("genres: %s\n", c.StringSlice("genres"))
+				isbnSet, title, author, isbn, err := determineTitleAuthorISBNAndISBNisSet(c)
+				if err != nil {
+					return err
+				}
+
+				db := ctx.Value(myCtx{}).(*sql.DB)
+				// check if the book already exists
+				if isbnSet {
+					if err := isbnExists(db, isbn, false); err != nil {
+						return err
+					}
+				} else {
+					if err := titleAuthorExists(db, title, author, false); err != nil {
+						return err
+					}
+				}
+
+				book := Book{
+					ISBN:    isbn,
+					Author:  strings.ToLower(author),
+					Title:   strings.ToLower(title),
+					Series:  strings.ToLower(c.String("series")),
+					Status:  BS_READING,
+					Started: c.Timestamp("started"),
+				}
+
+				genres := c.StringSlice("genres")
+				if genres != nil {
+					for ix, i := range genres {
+						genres[ix] = strings.ToLower(i)
+					}
+					book.Genres = genres
+				}
+
+				const QUERY = "INSERT INTO books (isbn, author, title, series, date_started, status, genres) VALUES(?, ?, ?, ?, ?, ?, ?)"
+				_, err = db.Exec(QUERY,
+					book.ISBN, book.Author, book.Title, book.Series,
+					book.Started.Unix(), book.Status, strings.Join(book.Genres, ","))
+				if err != nil {
+					return err
+				}
 				return nil
 			},
 		},
@@ -340,57 +389,20 @@ var CMD = &cli.Command{
 			},
 		},
 		{
-			Name:      "start",
-			Usage:     "start a book",
+			Name:      "add",
+			Usage:     "add a new book",
 			Arguments: commonArgs,
 			ArgsUsage: "[[title author]|ISBN]",
-			Flags:     startFlags,
+			Flags:     addFlags,
 			Action: func(ctx context.Context, c *cli.Command) error {
 				if err := requireAuthorTitleOrISBN(c); err != nil {
 					return err
 				}
 
-				isbnSet, title, author, isbn, err := determineTitleAuthorISBNAndISBNisSet(c)
-				if err != nil {
-					return err
-				}
-
-				db := ctx.Value(myCtx{}).(*sql.DB)
-				// check if the book already exists
-				if isbnSet {
-					if err := isbnExists(db, isbn, false); err != nil {
-						return err
-					}
-				} else {
-					if err := titleAuthorExists(db, title, author, false); err != nil {
-						return err
-					}
-				}
-
-				book := Book{
-					ISBN:    isbn,
-					Author:  strings.ToLower(author),
-					Title:   strings.ToLower(title),
-					Series:  strings.ToLower(c.String("series")),
-					Status:  BS_READING,
-					Started: c.Timestamp("started"),
-				}
-
-				genres := c.StringSlice("genres")
-				if genres != nil {
-					for ix, i := range genres {
-						genres[ix] = strings.ToLower(i)
-					}
-					book.Genres = genres
-				}
-
-				const QUERY = "INSERT INTO books (isbn, author, title, series, date_started, status, genres) VALUES(?, ?, ?, ?, ?, ?, ?)"
-				_, err = db.Exec(QUERY,
-					book.ISBN, book.Author, book.Title, book.Series,
-					book.Started.Unix(), book.Status, strings.Join(book.Genres, ","))
-				if err != nil {
-					return err
-				}
+				fmt.Println("TODO: 'add'")
+				fmt.Printf("args: %s\n", c.Args())
+				fmt.Printf("started: %s\n", c.Timestamp("started"))
+				fmt.Printf("genres: %s\n", c.StringSlice("genres"))
 				return nil
 			},
 		},
