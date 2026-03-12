@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -32,17 +33,17 @@ func requireAuthorTitleOrISBN(c *cli.Command) error {
 			return nil
 		}
 		if author != "" {
-			return fmt.Errorf("author must not be set if using ISBN mode")
+			return errors.New("author must not be set if using ISBN mode")
 		}
 		return fmt.Errorf("'%s' is not a valid ISBN number", title)
 	}
 	authorNotSet, titleNotSet := author == "", title == ""
 	if authorNotSet && titleNotSet {
-		return fmt.Errorf("title and author must be provided or use '-I ISBN'")
+		return errors.New("title and author must be provided or use '-I ISBN'")
 	} else if titleNotSet {
-		return fmt.Errorf("title must be provided or use '-I ISBN'")
+		return errors.New("title must be provided or use '-I ISBN'")
 	} else if authorNotSet {
-		return fmt.Errorf("author must be provided or use '-I ISBN'")
+		return errors.New("author must be provided or use '-I ISBN'")
 	}
 	return nil
 }
@@ -123,6 +124,7 @@ func titleAuthorExists(db *sql.DB, title, author string, shouldExist bool) error
 	if err != nil {
 		return err
 	}
+
 	doesExist := exists == 1
 	if shouldExist {
 		if doesExist {
@@ -154,7 +156,7 @@ var (
 		Usage:   "the `author` who wrote the book",
 		Action: func(ctx context.Context, c *cli.Command, s string) error {
 			if s == "" {
-				return fmt.Errorf("author can not be empty")
+				return errors.New("author can not be empty")
 			}
 			return nil
 		},
@@ -165,7 +167,7 @@ var (
 		Usage:   "the `title` of the book",
 		Action: func(ctx context.Context, c *cli.Command, s string) error {
 			if s == "" {
-				return fmt.Errorf("title can not be empty")
+				return errors.New("title can not be empty")
 			}
 			return nil
 		},
@@ -351,7 +353,8 @@ var CMD = &cli.Command{
 
 				state := BS_FINISHED
 				if c.IsSet("state") {
-					switch stateStr := c.String("state"); stateStr {
+					stateStr := strings.ToLower(c.String("state"))
+					switch stateStr {
 					case "none", "tbr", "reading":
 						return fmt.Errorf("the status of a book you are finishing can not be '%s'", stateStr)
 					case "finished":
@@ -507,8 +510,7 @@ var CMD = &cli.Command{
 			Arguments: commonArgs,
 			ArgsUsage: "[[title author]|ISBN]",
 			Action: func(ctx context.Context, c *cli.Command) error {
-				err := requireAuthorTitleOrISBN(c)
-				if err != nil {
+				if err := requireAuthorTitleOrISBN(c); err != nil {
 					return err
 				}
 
@@ -555,7 +557,7 @@ var CMD = &cli.Command{
 				}
 
 				fmt.Printf("searching '%s' on openlibrary\n", isbn)
-				cleanISBN := strings.ReplaceAll(strings.ReplaceAll(isbn, "-", ""), " ", "")
+				cleanISBN := cleanISBN(isbn)
 				query := fmt.Sprintf("https://openlibrary.org/search.json?q=%s&fields=title,author_name", cleanISBN)
 				resp, err := http.Get(query)
 				if err != nil {

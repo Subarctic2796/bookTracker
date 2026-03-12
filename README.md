@@ -1,6 +1,9 @@
 # Book Tracker
 A simple cli and web app(?) where I keep track of the books I have read
 
+# Dependencies
+- sqlite3
+
 # Usage
 ```sh
 git clone --depth=1 https://github.com/Subarctic2796/bookTracker.git
@@ -9,22 +12,26 @@ go build -o bookTracker src/*.go
 ./bookTracker --help
 ```
 You can optionally add it to your path.
-It will automatically create a new sqlite database at `$XDG_DATA_HOME/bookTracker/books.db` or `$HOME/.local/share/bookTracker/books.db`
-You can change this by creating `$XDG_CONFIG_HOME/bookTracker/bookTracker.conf` or `$HOME/.config/bookTracker/bookTracker.conf`
+It will automatically create a new sqlite database at
+- `$XDG_DATA_HOME/bookTracker/books.db` or `$HOME/.local/share/bookTracker/books.db` on linux and mac
+- `%LOCALAPPDATA%\bookTracker\books.db` on windows
+You can change this by creating
+- `$XDG_CONFIG_HOME/bookTracker/bookTracker.conf` or `$HOME/.config/bookTracker/bookTracker.conf` on linux and mac
+- `%APPDATA%\bookTracker\books.conf` on windows
 and adding the line `db_path = /path/to/database`
 
 # TODO
-[ ] add sqlite
-	[ ] add
-	[x] finish
-	[x] start
-	[ ] list
-	[ ] update
-	[x] remove
-	[ ]
-[ ] add creating db to `$HOME/.local/share/bookTracker/books.db`
-[ ] add checking config in `$HOME/.config/bookTracker`
-[ ] add windows support
+- [ ] add sqlite
+	- [x] finish
+	- [x] start
+	- [x] remove
+	- [ ] list
+	- [ ] update
+	- [ ] add
+- [ ] config stuff
+	- [ ] add creating db to `$HOME/.local/share/bookTracker/books.db`
+	- [ ] add checking config in `$HOME/.config/bookTracker`
+	- [ ] add windows support
 
 # Notes
 SQL schema:

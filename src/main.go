@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"runtime"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -18,10 +19,6 @@ type config struct {
 }
 
 func ReadConfigFile(path string) (config, error) {
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		panic("TODO")
-	}
-
 	f, err := os.ReadFile(path)
 	if err != nil {
 		return config{}, err
@@ -39,7 +36,7 @@ func ReadConfigFile(path string) (config, error) {
 	}
 
 	if dbPath == "" {
-		return config{}, fmt.Errorf("[malformed config file]: file must contain `db_path = /path/to/database`")
+		return config{}, errors.New("[malformed config file]: file must contain `db_path = /path/to/database`")
 	}
 
 	return config{dbPath}, nil
@@ -51,8 +48,40 @@ func GetConfig() (config, error) {
 		return config{}, err
 	}
 
-	path := path.Join(xdg_config_home, "bookTracker", "bookTracker.conf")
-	return ReadConfigFile(path)
+	path_ := path.Join(xdg_config_home, "bookTracker", "bookTracker.conf")
+	if _, err := os.Stat(path_); errors.Is(err, os.ErrNotExist) {
+		fmt.Printf("`%s` does not exist creating it\n", path_)
+
+		err = os.Mkdir(path.Join(xdg_config_home, "bookTracker"), os.ModePerm)
+		if err != nil {
+			return config{}, err
+		}
+
+		// create bookTracker.conf
+		data := fmt.Appendf(nil, "db_path = %s", path.Join(xdg_config_home, "bookTracker", "books.db"))
+		err = os.WriteFile(path_, data, 0666)
+		if err != nil {
+			return config{}, err
+		}
+
+		xdg_data_home_path := "XDG_DATA_HOME"
+		if runtime.GOOS == "windows" {
+			xdg_data_home_path = "LOCALAPPDATA"
+		}
+
+		xdg_data_home, isSet := os.LookupEnv(xdg_data_home_path)
+		if !isSet {
+			return config{}, fmt.Errorf("`%s` is not set", xdg_data_home_path)
+		}
+
+		// make $XDG_DATA_HOME/bookTracker
+		err = os.Mkdir(path.Join(xdg_data_home, "bookTracker"), os.ModePerm)
+		if err != nil {
+			return config{}, err
+		}
+	}
+
+	return ReadConfigFile(path_)
 }
 
 func initDB(dbPath string) (*sql.DB, error) {
@@ -87,7 +116,7 @@ func initDB(dbPath string) (*sql.DB, error) {
 type myCtx struct{}
 
 func main() {
-	// config, err := getConfig()
+	// config, err := GetConfig()
 	// if err != nil {
 	// 	fmt.Fprintln(os.Stderr, err)
 	// 	os.Exit(1)
