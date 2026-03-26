@@ -26,11 +26,14 @@ and adding the line `db_path = /path/to/database`
 	- [x] start
 	- [x] remove
 	- [ ] list
+		- [x] list everything
+		- [ ] add fine grained control
 	- [ ] update
+		- [ ] update arbitary fields
 	- [ ] add
 - [ ] config stuff
-	- [ ] add creating db to `$HOME/.local/share/bookTracker/books.db`
-	- [ ] add checking config in `$HOME/.config/bookTracker`
+	- [x] add creating db to `$HOME/.local/share/bookTracker/books.db`
+	- [x] add checking config in `$HOME/.config/bookTracker`
 	- [ ] add windows support
 
 # Notes

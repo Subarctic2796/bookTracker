@@ -262,11 +262,14 @@ var listFlags = []cli.Flag{
 	titleFlag,
 }
 
+const VERSION = "v0.0.1a"
+
 // TODO: at the moment we build a Book obj and then write it to the db
 // do we want to maybe just write it to the db straight
 var CMD = &cli.Command{
-	Name:  "bookTracker",
-	Usage: "track your books locally",
+	Name:    "bookTracker",
+	Version: VERSION,
+	Usage:   "track your books locally",
 	Flags: []cli.Flag{
 		&cli.BoolFlag{
 			Name:    "ISBN",
@@ -308,27 +311,20 @@ var CMD = &cli.Command{
 					}
 				}
 
-				book := Book{
-					ISBN:    isbn,
-					Author:  strings.ToLower(author),
-					Title:   strings.ToLower(title),
-					Series:  strings.ToLower(c.String("series")),
-					Status:  BS_READING,
-					Started: c.Timestamp("started"),
-				}
-
 				genres := c.StringSlice("genres")
-				if genres != nil {
+				// done this way so linter doesn't complain about unneeded nil check
+				if genres == nil {
+				} else {
 					for ix, i := range genres {
 						genres[ix] = strings.ToLower(i)
 					}
-					book.Genres = genres
 				}
 
 				const QUERY = "INSERT INTO books (isbn, author, title, series, date_started, status, genres) VALUES(?, ?, ?, ?, ?, ?, ?)"
 				_, err = db.Exec(QUERY,
-					book.ISBN, book.Author, book.Title, book.Series,
-					book.Started.Unix(), book.Status, strings.Join(book.Genres, ","))
+					isbn, strings.ToLower(author), strings.ToLower(title),
+					strings.ToLower(c.String("series")),
+					c.Timestamp("started"), BS_READING, strings.Join(genres, ","))
 				if err != nil {
 					return err
 				}
@@ -365,35 +361,37 @@ var CMD = &cli.Command{
 				}
 
 				db := ctx.Value(myCtx{}).(*sql.DB)
+				var QUERY string
+				query_args := make([]any, 0, 4)
+
 				// check if the book already exists
 				if isbnSet {
 					if err := isbnExists(db, isbn, true); err != nil {
 						return err
 					}
 
-					const QUERY = "UPDATE books SET status = ?, date_finished = ? WHERE isbn = ?"
-					_, err := db.Exec(QUERY, state, c.Timestamp("finished").Unix(), isbn)
-					if err != nil {
-						return err
-					}
+					QUERY = "UPDATE books SET status = ?, date_finished = ? WHERE isbn = ?"
+					query_args = append(query_args, state, c.Timestamp("finished").Unix(), isbn)
 				} else {
 					if err := titleAuthorExists(db, title, author, true); err != nil {
 						return err
 					}
 
-					const QUERY = "UPDATE books SET status = ?, date_finished = ? WHERE title = ? AND author = ?"
-					_, err := db.Exec(QUERY, state, c.Timestamp("finished").Unix(), strings.ToLower(title), strings.ToLower(author))
-					if err != nil {
-						return err
-					}
+					QUERY = "UPDATE books SET status = ?, date_finished = ? WHERE title = ? AND author = ?"
+					query_args = append(query_args, state, c.Timestamp("finished").Unix(),
+						strings.ToLower(title), strings.ToLower(author))
 				}
 
+				_, err = db.Exec(QUERY, query_args...)
+				if err != nil {
+					return err
+				}
 				return nil
 			},
 		},
 		{
 			Name:      "add",
-			Usage:     "add a new book",
+			Usage:     "add a new book with any information",
 			Arguments: commonArgs,
 			ArgsUsage: "[[title author]|ISBN]",
 			Flags:     addFlags,
@@ -480,26 +478,28 @@ var CMD = &cli.Command{
 
 				db := ctx.Value(myCtx{}).(*sql.DB)
 
+				var QUERY string
+				query_args := make([]any, 0, 4)
 				if isbnSet {
 					if err := isbnExists(db, isbn, true); err != nil {
 						return err
 					}
 
-					const QUERY = "UPDATE books COL = ?, COL2 = ? WHERE isbn = ?"
-					_, err = db.Exec(QUERY, "", "", isbn)
-					if err != nil {
-						return err
-					}
+					QUERY = "UPDATE books COL = ?, COL2 = ? WHERE isbn = ?"
+					query_args = append(query_args, "", "", isbn)
 				} else {
 					if err := titleAuthorExists(db, title, author, true); err != nil {
 						return err
 					}
 
-					const QUERY = "UPDATE books COL = ?, COL2 = ? WHERE title = ? AND author = ?"
-					_, err = db.Exec(QUERY, "", "", strings.ToLower(title), strings.ToLower(author))
-					if err != nil {
-						return err
-					}
+					QUERY = "UPDATE books COL = ?, COL2 = ? WHERE title = ? AND author = ?"
+					query_args = append(query_args, "", "",
+						strings.ToLower(title), strings.ToLower(author))
+				}
+
+				_, err = db.Exec(QUERY, query_args...)
+				if err != nil {
+					return err
 				}
 				return nil
 			},
@@ -520,29 +520,30 @@ var CMD = &cli.Command{
 				}
 
 				db := ctx.Value(myCtx{}).(*sql.DB)
+				var QUERY string
+				query_args := make([]any, 0, 2)
 
 				if isbnSet {
 					if err := isbnExists(db, isbn, true); err != nil {
 						return err
 					}
 
-					const QUERY = "DELETE FROM books WHERE isbn = ?"
-					_, err := db.Exec(QUERY, isbn)
-					if err != nil {
-						return err
-					}
+					QUERY = "DELETE FROM books WHERE isbn = ?"
+					query_args = append(query_args, isbn)
 				} else {
 					if err := titleAuthorExists(db, title, author, true); err != nil {
 						return err
 					}
 
-					const QUERY = "DELETE FROM books WHERE title = ? AND author = ?"
-					_, err := db.Exec(QUERY, strings.ToLower(title), strings.ToLower(author))
-					if err != nil {
-						return err
-					}
+					QUERY = "DELETE FROM books WHERE title = ? AND author = ?"
+					query_args = append(query_args,
+						strings.ToLower(title), strings.ToLower(author))
 				}
 
+				_, err = db.Exec(QUERY, query_args...)
+				if err != nil {
+					return err
+				}
 				return nil
 			},
 		},

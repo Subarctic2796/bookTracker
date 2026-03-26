@@ -24,22 +24,16 @@ func ReadConfigFile(path string) (config, error) {
 		return config{}, err
 	}
 
-	dbPath := ""
 	for line := range bytes.Lines(f) {
 		parts := bytes.Split(bytes.TrimSpace(line), []byte{'='})
 		key := bytes.TrimSpace(parts[0])
 		value := bytes.TrimSpace(parts[1])
 		if string(key) == "db_path" {
-			dbPath = string(value)
-			break
+			return config{string(value)}, nil
 		}
 	}
 
-	if dbPath == "" {
-		return config{}, errors.New("[malformed config file]: file must contain `db_path = /path/to/database`")
-	}
-
-	return config{dbPath}, nil
+	return config{}, errors.New("[malformed config file]: file must contain `db_path = /path/to/database`")
 }
 
 func GetConfig() (config, error) {
@@ -50,7 +44,7 @@ func GetConfig() (config, error) {
 
 	path_ := path.Join(xdg_config_home, "bookTracker", "bookTracker.conf")
 	if _, err := os.Stat(path_); errors.Is(err, os.ErrNotExist) {
-		fmt.Printf("`%s` does not exist creating it\n", path_)
+		fmt.Println("'bookTracker.conf' does not exist, creating 'bookTracker.conf'")
 
 		err = os.Mkdir(path.Join(xdg_config_home, "bookTracker"), os.ModePerm)
 		if err != nil {
@@ -59,7 +53,7 @@ func GetConfig() (config, error) {
 
 		// create bookTracker.conf
 		data := fmt.Appendf(nil, "db_path = %s", path.Join(xdg_config_home, "bookTracker", "books.db"))
-		err = os.WriteFile(path_, data, 0666)
+		err = os.WriteFile(path_, data, 0o666)
 		if err != nil {
 			return config{}, err
 		}
